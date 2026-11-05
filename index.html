@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Standard Deviation</title>
+    
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- KaTeX for math rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+    
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f8fafc; /* Tailwind slate-50 */
+            color: #0f172a; /* Tailwind slate-900 */
+        }
+
+        /* SVG Element Transitions */
+        .svg-transition {
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .fade-enter {
+            opacity: 0;
+        }
+        .fade-enter-active {
+            opacity: 1;
+            transition: opacity 300ms ease-in;
+        }
+        
+        .draggable-point {
+            cursor: grab;
+            transition: r 0.2s ease, fill 0.2s ease;
+        }
+        .draggable-point:active {
+            cursor: grabbing;
+        }
+        .draggable-point:hover {
+            r: 12;
+            fill: #60a5fa; /* blue-400 */
+        }
+        
+        /* Math display styling */
+        .math-display {
+            font-size: 1.25rem;
+            background: #f1f5f9; /* slate-100 */
+            padding: 1rem;
+            border-radius: 0.75rem;
+            box-shadow: inset 0 2px 4px 0 rgb(0 0 0 / 0.05);
+            min-height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow-x: auto;
+        }
+
+        .highlight-math {
+            color: #0284c7; /* sky-600 */
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col p-4 md:p-8">
+
+    <header class="mb-8 text-center max-w-3xl mx-auto">
+        <h1 class="text-3xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-emerald-600 mb-4">
+            Demystifying Standard Deviation
+        </h1>
+        <p class="text-slate-600 text-lg">
+            Interact with the data points on the line below. Follow the steps to see exactly how the standard deviation formula translates to visual geometry.
+        </p>
+    </header>
+
+    <main class="flex-1 flex flex-col lg:flex-row gap-8 max-w-7xl mx-auto w-full">
+        
+        <!-- Left Column: Visualization -->
+        <section class="flex-1 bg-white rounded-2xl shadow-xl p-4 md:p-6 border border-slate-200 flex flex-col relative touch-none">
+            <h2 class="text-xl font-bold mb-4 text-slate-800">Interactive Number Line</h2>
+            <p class="text-sm text-slate-500 mb-4">Drag the blue dots to change the data values.</p>
+            
+            <div class="w-full flex-1 relative min-h-[400px] bg-slate-50 rounded-xl overflow-hidden shadow-inner border border-slate-100" id="svg-container">
+                <svg id="viz" width="100%" height="100%" class="absolute inset-0">
+                    <!-- Definitions for patterns/markers -->
+                    <defs>
+                        <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#e2e8f0" stroke-width="1"/>
+                        </pattern>
+                        <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                            <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8" />
+                        </marker>
+                        <marker id="arrow-pink" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                            <path d="M 0 0 L 10 5 L 0 10 z" fill="#f472b6" />
+                        </marker>
+                    </defs>
+                    
+                    <rect width="100%" height="100%" fill="url(#grid)" />
+                    
+                    <!-- Dynamic Elements Grouped by Layers for proper overlapping -->
+                    <g id="layer-squares"></g>
+                    <g id="layer-variance"></g>
+                    <g id="layer-deviations"></g>
+                    <g id="layer-axis"></g>
+                    <g id="layer-mean"></g>
+                    <g id="layer-stddev"></g>
+                    <g id="layer-points"></g>
+                </svg>
+            </div>
+            
+            <!-- Real-time Stats summary -->
+            <div class="mt-4 grid grid-cols-3 gap-4 text-center">
+                <div class="bg-slate-100 p-3 rounded-lg border border-slate-200">
+                    <div class="text-xs text-slate-500 uppercase tracking-wide">Mean (&mu;)</div>
+                    <div class="text-xl font-bold text-emerald-600" id="stat-mean">0.00</div>
+                </div>
+                <div class="bg-slate-100 p-3 rounded-lg border border-slate-200">
+                    <div class="text-xs text-slate-500 uppercase tracking-wide">Variance (&sigma;&sup2;)</div>
+                    <div class="text-xl font-bold text-amber-600" id="stat-var">0.00</div>
+                </div>
+                <div class="bg-slate-100 p-3 rounded-lg border border-slate-200">
+                    <div class="text-xs text-slate-500 uppercase tracking-wide">Std Dev (&sigma;)</div>
+                    <div class="text-xl font-bold text-sky-600" id="stat-std">0.00</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Right Column: Step-by-Step Logic -->
+        <section class="w-full lg:w-[450px] flex flex-col gap-6">
+            
+            <div class="bg-white rounded-2xl shadow-xl p-6 border border-slate-200">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold text-slate-800" id="step-title">Step 0</h2>
+                    <div class="text-sm font-medium bg-blue-100 text-blue-700 px-3 py-1 rounded-full">
+                        Step <span id="step-counter">1</span> of 6
+                    </div>
+                </div>
+
+                <div class="mb-6 min-h-[80px]">
+                    <p class="text-slate-600 leading-relaxed" id="step-desc">
+                        Description goes here.
+                    </p>
+                </div>
+
+                <!-- Equation Box -->
+                <div class="mb-8">
+                    <h3 class="text-xs text-slate-500 uppercase tracking-widest mb-2 font-semibold">Active Formula</h3>
+                    <div class="math-display" id="math-container">
+                        <!-- KaTeX rendered here -->
+                    </div>
+                </div>
+
+                <!-- Navigation Controls -->
+                <div class="flex gap-3">
+                    <button id="btn-prev" class="flex-1 py-3 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        Previous
+                    </button>
+                    <button id="btn-next" class="flex-1 py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-600/30">
+                        Next Step
+                    </button>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-2xl shadow-xl p-6 border border-slate-200">
+                <h3 class="text-lg font-bold text-slate-800 mb-2">Why Standard Deviation?</h3>
+                <p class="text-sm text-slate-600 mb-2">
+                    Standard deviation tells us how "spread out" the numbers are from the mean. 
+                </p>
+                <ul class="text-sm text-slate-600 list-disc pl-5 space-y-1">
+                    <li><strong>Low &sigma;:</strong> Data points are clustered closely around the mean.</li>
+                    <li><strong>High &sigma;:</strong> Data points are spread out over a wider range.</li>
+                </ul>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        // === State Management ===
+        const state = {
+            data: [20, 35, 50, 75, 90], // Initial data points (values 0-100)
+            step: 0,
+            maxStep: 5,
+            draggedPointIndex: null,
+            svgConfig: {
+                width: 0,
+                height: 0,
+                padding: 40,
+                axisY: 0,
+                scale: 1 // pixels per unit
+            }
+        };
+
+        // === Step Definitions ===
+        const steps = [
+            {
+                title: "1. The Data Points",
+                desc: "We start with a set of data points, represented as $X = \\{x_1, x_2, ..., x_N\\}$. Here, we have $N = 5$ points. Drag the blue dots to arrange them however you like.",
+                formula: "X = \\{x_1, x_2, ..., x_N\\}",
+                highlight: ""
+            },
+            {
+                title: "2. Find the Mean (\u03bc)",
+                desc: "First, we find the center of our data by calculating the mean (average), denoted by the Greek letter Mu ($\mu$). This is the sum of all values divided by the number of values.",
+                formula: "\\mu = \\frac{\\sum x_i}{N}",
+                highlight: "\\mu"
+            },
+            {
+                title: "3. Calculate Deviations",
+                desc: "Next, we find the distance of each data point from the mean. This is called the deviation ($x_i - \\mu$). Notice some are positive (right of mean) and some are negative (left).",
+                formula: "Deviations = (x_i - \\mu)",
+                highlight: "(x_i - \\mu)"
+            },
+            {
+                title: "4. Square the Deviations",
+                desc: "If we just added the deviations, negative and positive distances would cancel out to zero! To fix this, we square each deviation: $(x_i - \\mu)^2$. Geometrically, this creates actual squares.",
+                formula: "\\text{Area} = (x_i - \\mu)^2",
+                highlight: "(x_i - \\mu)^2"
+            },
+            {
+                title: "5. The Variance (\u03c3\u00b2)",
+                desc: "We find the average of all these squared areas. This average area is called the Variance (Sigma squared). The large gold square represents this average area.",
+                formula: "\\sigma^2 = \\frac{\\sum (x_i - \\mu)^2}{N}",
+                highlight: "\\sigma^2"
+            },
+            {
+                title: "6. Standard Deviation (\u03c3)",
+                desc: "Variance is in 'squared units' (an area). To get back to our original units (a distance), we take the square root of the variance. This length is the Standard Deviation!",
+                formula: "\\sigma = \\sqrt{\\frac{\\sum (x_i - \\mu)^2}{N}}",
+                highlight: "\\sigma"
+            }
+        ];
+
+        // === DOM Elements ===
+        const svg = document.getElementById('viz');
+        const container = document.getElementById('svg-container');
+        
+        // Layers
+        const layerAxis = document.getElementById('layer-axis');
+        const layerPoints = document.getElementById('layer-points');
+        const layerMean = document.getElementById('layer-mean');
+        const layerDeviations = document.getElementById('layer-deviations');
+        const layerSquares = document.getElementById('layer-squares');
+        const layerVariance = document.getElementById('layer-variance');
+        const layerStdDev = document.getElementById('layer-stddev');
+
+        // UI Text
+        const stepTitle = document.getElementById('step-title');
+        const stepDesc = document.getElementById('step-desc');
+        const stepCounter = document.getElementById('step-counter');
+        const mathContainer = document.getElementById('math-container');
+        
+        const statMean = document.getElementById('stat-mean');
+        const statVar = document.getElementById('stat-var');
+        const statStd = document.getElementById('stat-std');
+        
+        const btnPrev = document.getElementById('btn-prev');
+        const btnNext = document.getElementById('btn-next');
+
+        // === Math Helper Functions ===
+        const calcMean = (arr) => arr.reduce((a, b) => a + b, 0) / arr.length;
+        const calcVariance = (arr, mean) => arr.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / arr.length;
+
+        // === SVG Coordinate Mapping ===
+        const mapX = (val) => state.svgConfig.padding + (val / 100) * (state.svgConfig.width - 2 * state.svgConfig.padding);
+        const mapXInv = (x) => ((x - state.svgConfig.padding) / (state.svgConfig.width - 2 * state.svgConfig.padding)) * 100;
+        
+        function updateSvgDimensions() {
+            const rect = container.getBoundingClientRect();
+            state.svgConfig.width = rect.width;
+            state.svgConfig.height = rect.height;
+            // Place axis lower to make room for squares above
+            state.svgConfig.axisY = state.svgConfig.height - 80; 
+            // Calculate pixel scale for 1 unit of X to keep squares perfectly square in screen space
+            const trackWidth = state.svgConfig.width - 2 * state.svgConfig.padding;
+            state.svgConfig.scale = trackWidth / 100; 
+        }
+
+        // === Rendering Logic ===
+        
+        function createSvgElement(tag, attrs = {}) {
+            const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+            for (const [k, v] of Object.entries(attrs)) {
+                el.setAttribute(k, v);
+            }
+            return el;
+        }
+
+        function renderMath() {
+            const stepData = steps[state.step];
+            katex.render(stepData.formula, mathContainer, {
+                throwOnError: false,
+                displayMode: true
+            });
+            
+            // Note: Highlighting specific parts of KaTeX dynamically is complex.
+            // For a robust single-file implementation, we render the full formula.
+        }
+
+        function updateUI() {
+            const stepData = steps[state.step];
+            stepTitle.textContent = stepData.title;
+            stepCounter.textContent = state.step + 1;
+            
+            // Process description for basic inline math (text surrounded by $)
+            const formattedDesc = stepData.desc.replace(/\$(.*?)\$/g, (match, p1) => {
+                return katex.renderToString(p1, { throwOnError: false, displayMode: false });
+            });
+            stepDesc.innerHTML = formattedDesc;
+            
+            renderMath();
+            
+            btnPrev.disabled = state.step === 0;
+            btnNext.disabled = state.step === state.maxStep;
+            if(state.step === state.maxStep) {
+                btnNext.classList.remove('bg-blue-600', 'hover:bg-blue-700', 'text-white', 'shadow-lg', 'shadow-blue-600/30');
+                btnNext.classList.add('bg-slate-100', 'text-slate-700', 'border', 'border-slate-200');
+            } else {
+                btnNext.classList.add('bg-blue-600', 'hover:bg-blue-700', 'text-white', 'shadow-lg', 'shadow-blue-600/30');
+                btnNext.classList.remove('bg-slate-100', 'text-slate-700', 'border', 'border-slate-200');
+            }
+        }
+
+        function renderVisualization() {
+            // 1. Calculate Stats
+            const mean = calcMean(state.data);
+            const variance = calcVariance(state.data, mean);
+            const stdDev = Math.sqrt(variance);
+
+            // Update stats display
+            statMean.textContent = mean.toFixed(1);
+            statVar.textContent = variance.toFixed(1);
+            statStd.textContent = stdDev.toFixed(1);
+
+            // 2. Clear Layers
+            layerAxis.innerHTML = '';
+            layerPoints.innerHTML = '';
+            layerMean.innerHTML = '';
+            layerDeviations.innerHTML = '';
+            layerSquares.innerHTML = '';
+            layerVariance.innerHTML = '';
+            layerStdDev.innerHTML = '';
+
+            const { axisY, scale } = state.svgConfig;
+            const meanPx = mapX(mean);
+
+            // --- Step 0 & Always: Axis and Points ---
+            
+            // Main Axis Line
+            layerAxis.appendChild(createSvgElement('line', {
+                x1: mapX(0), y1: axisY, x2: mapX(100), y2: axisY,
+                stroke: '#94a3b8', 'stroke-width': 2, 'marker-end': 'url(#arrow)', 'marker-start': 'url(#arrow)'
+            }));
+            
+            // Ticks (0, 25, 50, 75, 100)
+            [0, 25, 50, 75, 100].forEach(val => {
+                const x = mapX(val);
+                layerAxis.appendChild(createSvgElement('line', {
+                    x1: x, y1: axisY - 5, x2: x, y2: axisY + 5, stroke: '#94a3b8', 'stroke-width': 2
+                }));
+                layerAxis.appendChild(createSvgElement('text', {
+                    x: x, y: axisY + 20, fill: '#64748b', 'text-anchor': 'middle', 'font-size': '12px'
+                })).textContent = val;
+            });
+
+            // --- Step 1+: Mean Line ---
+            if (state.step >= 1) {
+                const meanLine = createSvgElement('line', {
+                    x1: meanPx, y1: 20, x2: meanPx, y2: axisY + 30,
+                    stroke: '#34d399', 'stroke-width': 2, 'stroke-dasharray': '5,5',
+                    class: 'svg-transition'
+                });
+                layerMean.appendChild(meanLine);
+                
+                const meanLabel = createSvgElement('text', {
+                    x: meanPx, y: 15, fill: '#34d399', 'text-anchor': 'middle',
+                    'font-weight': 'bold', 'font-size': '16px', 'font-style': 'italic'
+                });
+                meanLabel.innerHTML = '&mu;';
+                layerMean.appendChild(meanLabel);
+            }
+
+            // Iterate over data to draw elements connected to individual points
+            state.data.forEach((val, i) => {
+                const xPx = mapX(val);
+                const devPx = (val - mean) * scale; // Signed distance in pixels
+                const absDevPx = Math.abs(devPx);
+                
+                // --- Step 2+: Deviations ---
+                if (state.step >= 2) {
+                    const devLine = createSvgElement('line', {
+                        x1: xPx, y1: axisY - 15 - (i * 10), // Start from the data point
+                        x2: meanPx, y2: axisY - 15 - (i * 10), // End at the mean
+                        stroke: '#f472b6', 'stroke-width': 2,
+                        'marker-end': 'url(#arrow-pink)' // Arrow head placed at the mean end
+                    });
+                    
+                    // Small vertical connector
+                    const connLine = createSvgElement('line', {
+                        x1: xPx, y1: axisY, x2: xPx, y2: axisY - 15 - (i * 10),
+                        stroke: '#f472b6', 'stroke-width': 1, 'stroke-dasharray': '2,2'
+                    });
+                    
+                    layerDeviations.appendChild(connLine);
+                    layerDeviations.appendChild(devLine);
+                }
+
+                // --- Step 3: Squared Deviations ---
+                if (state.step === 3 || state.step === 4) {
+                    // Draw squares above the axis
+                    const squareY = axisY - absDevPx;
+                    
+                    // Only draw if there's a deviation to avoid drawing zero-width rects which might look weird
+                    if (absDevPx > 1) {
+                        const sq = createSvgElement('rect', {
+                            x: val >= mean ? meanPx : xPx,
+                            y: squareY,
+                            width: absDevPx,
+                            height: absDevPx,
+                            fill: 'rgba(236, 72, 153, 0.15)', // pink
+                            stroke: '#ec4899',
+                            'stroke-width': 1,
+                            class: 'svg-transition'
+                        });
+                        
+                        // If we are at step 4 (Variance), transition opacity down for individual squares
+                        if(state.step === 4) {
+                           sq.setAttribute('opacity', '0.2');
+                        }
+                        
+                        layerSquares.appendChild(sq);
+                    }
+                }
+
+                // --- Points (Drawn Last to stay on top) ---
+                const circle = createSvgElement('circle', {
+                    cx: xPx,
+                    cy: axisY,
+                    r: state.draggedPointIndex === i ? 12 : 8,
+                    fill: state.draggedPointIndex === i ? '#60a5fa' : '#3b82f6',
+                    stroke: '#fff',
+                    'stroke-width': 2,
+                    class: 'draggable-point svg-transition',
+                    'data-index': i
+                });
+                
+                // Add value label above point
+                const label = createSvgElement('text', {
+                    x: xPx, y: axisY + 30,
+                    fill: '#475569', 'text-anchor': 'middle', 'font-size': '10px'
+                });
+                label.textContent = Math.round(val);
+                
+                layerPoints.appendChild(circle);
+                layerPoints.appendChild(label);
+            });
+
+            // --- Step 4+: Variance (Average Area) ---
+            if (state.step >= 4) {
+                const varSidePx = Math.sqrt(variance) * scale;
+                // Center this square on the mean, high up
+                const varY = axisY - varSidePx;
+                
+                if (varSidePx > 1) {
+                    const varRect = createSvgElement('rect', {
+                        x: meanPx,
+                        y: varY,
+                        width: varSidePx,
+                        height: varSidePx,
+                        fill: 'rgba(251, 191, 36, 0.3)', // amber
+                        stroke: '#fbbf24',
+                        'stroke-width': 2,
+                        class: 'svg-transition'
+                    });
+                    layerVariance.appendChild(varRect);
+                    
+                    // Label
+                    const varLabel = createSvgElement('text', {
+                        x: meanPx + varSidePx/2, y: varY + varSidePx/2 + 5,
+                        fill: '#fbbf24', 'text-anchor': 'middle', 'font-size': '14px', 'font-weight': 'bold'
+                    });
+                    varLabel.textContent = 'σ²';
+                    layerVariance.appendChild(varLabel);
+                }
+            }
+
+            // --- Step 5: Standard Deviation ---
+            if (state.step >= 5) {
+                const stdPx = stdDev * scale;
+                const devY = axisY + 45; // Place below axis
+
+                // Draw thick line for std dev starting from mean
+                const stdLine = createSvgElement('line', {
+                    x1: meanPx, y1: devY, x2: meanPx + stdPx, y2: devY,
+                    stroke: '#38bdf8', 'stroke-width': 6, 'stroke-linecap': 'round'
+                });
+                
+                // Also draw left side for intuition
+                const stdLineL = createSvgElement('line', {
+                    x1: meanPx, y1: devY, x2: meanPx - stdPx, y2: devY,
+                    stroke: '#38bdf8', 'stroke-width': 6, 'stroke-linecap': 'round', opacity: 0.3
+                });
+
+                // End cap markers
+                const capR = createSvgElement('line', { x1: meanPx + stdPx, y1: devY-5, x2: meanPx + stdPx, y2: devY+5, stroke: '#38bdf8', 'stroke-width': 2 });
+                const capL = createSvgElement('line', { x1: meanPx - stdPx, y1: devY-5, x2: meanPx - stdPx, y2: devY+5, stroke: '#38bdf8', 'stroke-width': 2, opacity: 0.3 });
+                const capM = createSvgElement('line', { x1: meanPx, y1: devY-8, x2: meanPx, y2: devY+8, stroke: '#34d399', 'stroke-width': 2 });
+
+                // Text
+                const stdText = createSvgElement('text', {
+                    x: meanPx + stdPx/2, y: devY - 8,
+                    fill: '#38bdf8', 'text-anchor': 'middle', 'font-weight': 'bold'
+                });
+                stdText.innerHTML = '&sigma;';
+
+                layerStdDev.appendChild(stdLine);
+                layerStdDev.appendChild(stdLineL);
+                layerStdDev.appendChild(capR);
+                layerStdDev.appendChild(capL);
+                layerStdDev.appendChild(capM);
+                layerStdDev.appendChild(stdText);
+            }
+        }
+
+        // === Event Listeners for Interaction ===
+
+        function handleDragStart(e) {
+            // Find if a circle was clicked
+            if (e.target.tagName === 'circle' && e.target.classList.contains('draggable-point')) {
+                state.draggedPointIndex = parseInt(e.target.getAttribute('data-index'));
+            }
+        }
+
+        function handleDragMove(e) {
+            if (state.draggedPointIndex === null) return;
+            
+            // Get mouse position relative to SVG
+            const rect = svg.getBoundingClientRect();
+            
+            // Support both mouse and touch
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            
+            const mouseX = clientX - rect.left;
+            
+            // Convert pixel X to data value
+            let val = mapXInv(mouseX);
+            
+            // Clamp between 0 and 100
+            val = Math.max(0, Math.min(100, val));
+            
+            // Update state
+            state.data[state.draggedPointIndex] = val;
+            
+            // Re-render
+            requestAnimationFrame(renderVisualization);
+        }
+
+        function handleDragEnd() {
+            if (state.draggedPointIndex !== null) {
+                state.draggedPointIndex = null;
+                requestAnimationFrame(renderVisualization);
+            }
+        }
+
+        // Mouse Events
+        svg.addEventListener('mousedown', handleDragStart);
+        window.addEventListener('mousemove', handleDragMove);
+        window.addEventListener('mouseup', handleDragEnd);
+        
+        // Touch Events
+        svg.addEventListener('touchstart', handleDragStart, {passive: false});
+        window.addEventListener('touchmove', (e) => {
+            if(state.draggedPointIndex !== null) {
+                e.preventDefault(); // Prevent scrolling while dragging point
+                handleDragMove(e);
+            }
+        }, {passive: false});
+        window.addEventListener('touchend', handleDragEnd);
+
+        // Window Resize
+        window.addEventListener('resize', () => {
+            updateSvgDimensions();
+            renderVisualization();
+        });
+
+        // Navigation
+        btnNext.addEventListener('click', () => {
+            if (state.step < state.maxStep) {
+                state.step++;
+                updateUI();
+                renderVisualization();
+            }
+        });
+        
+        btnPrev.addEventListener('click', () => {
+            if (state.step > 0) {
+                state.step--;
+                updateUI();
+                renderVisualization();
+            }
+        });
+
+        // === Initialization ===
+        document.addEventListener('DOMContentLoaded', () => {
+            // Initialize KaTeX if loaded, else wait a tiny bit (defer script)
+            setTimeout(() => {
+                updateSvgDimensions();
+                updateUI();
+                renderVisualization();
+            }, 100);
+        });
+
+    </script>
+</body>
+</html>
